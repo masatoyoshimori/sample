@@ -1,0 +1,99 @@
+---
+# Install nessesary items
+- name: install yum-utils
+  yum:
+    name: yum-utils
+    state: present
+
+- name: install device-mapper-persistent-data
+  yum:
+    name: device-mapper-persistent-data
+    state: present
+
+- name: install lvm2
+  yum:
+    name: lvm2
+    state: present
+
+# Add repository
+
+- name: add docker repo
+  shell: "yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo"
+  args:
+    chdir: /etc/yum.repos.d
+    creates: docker-ce.repo
+
+# Install docker-ce
+
+- name: install docker-ce
+  yum:
+    name: docker-ce
+    state: present
+
+# Settings for docker-daemon to pull in Docker-Hub
+
+- name: create directory
+  file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+
+- name: create file "http-proxy.conf"
+  copy:
+    src: /home/ansible/roles/docker/templates/http-proxy.conf
+    dest: /etc/systemd/system/docker.service.d/http-proxy.conf
+    owner: ansible
+    group: ansiblegroup
+    mode: 0644
+
+# Relating to UID, GID between host and containeer
+
+- name: create file "docker.conf"
+  copy:
+    src: /home/ansible/roles/docker/templates/docker.conf
+    dest: /etc/systemd/system/docker.service.d/docker.conf
+    owner: ansible
+    group: ansiblegroup
+    mode: 0644
+
+# Download docker-compose
+
+- name: Download docker-compose
+  environment:
+    http_proxy: http://fbkproto:1234567890@proxy.cloud.css.fujitsu.com:8080
+    https_proxy: http://fbkproto:1234567890@proxy.cloud.css.fujitsu.com:8080
+  get_url:
+    url: https://github.com/docker/compose/releases/download/1.18.0/docker-compose-Linux-x86_64
+    dest: /usr/local/bin/docker-compose
+    mode: 0755
+    timeout: 600
+    use_proxy: yes
+
+# Settings for docker-daemon to pull in Docker-Hub
+
+- name: create directory
+  file:
+    path: /etc/docker
+    state: directory
+    owner: root
+    group: root
+    mode: 0644
+
+- name: create file "daemon.json"
+  copy:
+    src: /home/ansible/roles/docker/templates/daemon.json
+    dest: /etc/docker/daemon.json
+    owner: ansible
+    group: ansiblegroup
+    mode: 0644
+
+- name: restart docker
+  systemd:
+    name: docker.service
+    state: restarted
+    daemon_reload: yes
+    enabled: yes
+
+...
