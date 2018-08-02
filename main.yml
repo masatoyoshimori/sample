@@ -4,12 +4,12 @@
   yum:
     name: yum-utils
     state: present
-    
+
 - name: install device-mapper-persistent-data
   yum:
     name: device-mapper-persistent-data
     state: present
-    
+
 - name: install lvm2
   yum:
     name: lvm2
