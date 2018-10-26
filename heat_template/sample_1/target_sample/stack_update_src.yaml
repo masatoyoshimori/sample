@@ -1,0 +1,307 @@
+#Heat templateのバージョンは2013-05-23で固定
+heat_template_version:                                2013-05-23
+description:                                          インフラプロト3rdスタック更新テンプレート
+
+#以下、「parameters」(変数宣言)と「resources」(仮想リソース作成)セクションに分かれる
+parameters:
+  param-dns-servers:
+    type:                                             comma_delimited_list
+    description:                                      DNSサーバのリスト
+
+  param-az:
+    type:                                             string
+    description:                                      AZ名
+
+  param-dev-front-name:
+    type:                                             string
+    description:                                      開発フロントエンドサーバ名
+    default:                                          dev-front-server
+ 
+  param-dev-back-name:
+    type:                                             string
+    description:                                      開発バックエンドサーバ名
+    default:                                          dev-back-server
+ 
+  param-st-front-name:
+    type:                                             string
+    description:                                      STフロントエンドサーバ名
+    default:                                          st-front-server
+ 
+  param-st-back-name:
+    type:                                             string
+    description:                                      STバックエンドサーバ名
+    default:                                          st-back-server
+ 
+  param-prod-front-name:
+    type:                                             string
+    description:                                      本番フロントエンドサーバ名
+    default:                                          prod-front-server
+ 
+  param-prod-back-name:
+    type:                                             string
+    description:                                      本番バックエンドサーバ名
+    default:                                          prod-back-server
+
+  param-front-image-id:
+    type:                                             string
+    description:                                      フロントエンドサーバに使用するイメージID
+    default:                                          a0fe2e71-acb9-479d-b7f9-0270d1ef4fb1 #CentOS 7.3 64bit (English) 01
+
+  param-back-image-id:
+    type:                                             string
+    description:                                      バックエンドサーバに使用するイメージID
+    default:                                          a0fe2e71-acb9-479d-b7f9-0270d1ef4fb1 #CentOS 7.3 64bit (English) 01
+
+  param-front-flavor:
+    type:                                             string
+    description:                                      フロントエンドサーバのフレーバー名
+    default:                                          T-1
+
+  param-back-flavor:
+    type:                                             string
+    description:                                      バックエンドサーバのフレーバー名
+    default:                                          T-1
+
+  param-front-volume-type:
+    type:                                             string
+    description:                                      フロントエンドサーバのボリュームタイプ名
+    default:                                          M1
+
+  param-back-volume-type:
+    type:                                             string
+    description:                                      バックエンドサーバのボリュームタイプ名
+    default:                                          M1
+
+  param-front-volume-size:
+    type:                                             string
+    description:                                      フロントエンドサーバのボリュームサイズ(GB)
+    default:                                          '30'
+
+  param-back-volume-size:
+    type:                                             string
+    description:                                      バックエンドサーバのボリュームサイズ(GB)
+    default:                                          '30'
+
+  param-front-volume-name:
+    type:                                             string
+    description:                                      フロントエンドサーバのボリューム名
+    default:                                          front-volume
+
+  param-back-volume-name:
+    type:                                             string
+    description:                                      バックエンドサーバのボリューム名
+    default:                                          back-volume
+
+  # SSH KeyはAZ毎に用意する
+  param-key-name:
+    type:                                             string
+    description:                                      フロント・バックエンドサーバへの接続に使用する鍵
+
+  param-cloud-init-srv-ip:
+    type:                                             string
+    description:                                      cloud-initが動作するサーバのIP(IPアドレスについては、機能説明書を参照)
+    default:                                          169.254.169.254/32 #K5のcloud-initサーバ
+
+  param-ssl-vpn-subnet-cidr:
+    type:                                             string
+    description:                                      SSL-VPN用サブネットのCIDR
+    default:                                          172.20.127.0/24
+
+  param-client-subnet-cidr:
+    type:                                             string
+    description:                                      クライアント用サブネットのCIDR
+    default:                                          192.168.0.0/24
+
+  param-ssl-vpn-router-ip:
+    type:                                             string
+    description:                                      SSL-VPN用ルータのIP
+    default:                                          172.20.127.1
+
+  param-ext-network-name:
+    type:                                             string
+    description:                                      外部ネットワーク名
+
+  param-ext-network-id:
+    type:                                             string
+    description:                                      外部ネットワークID
+
+  param-ssl-vpn-ext-network-name:
+    type:                                             string
+    description:                                      SSL-VPN用外部ネットワーク名
+
+
+  ## SSL-VPN関連
+  param-ssl-vpn-router-name:
+    type:                                             string
+    description:                                      SSL-VPN用ルータ名
+    default:                                          sample-ssl-vpn-router
+
+  param-ssl-vpn-router-port-name:
+    type:                                             string
+    description:                                      SSL-VPN用ルータのポート名
+    default:                                          sample-ssl-vpn-router-port
+
+  param-ssl-vpn-network-name:
+    type:                                             string
+    description:                                      SSL-VPN用ネットワーク名
+    default:                                          sample-ssl-vpn-network
+
+  param-ssl-vpn-subnet-name:
+    type:                                             string
+    description:                                      SSL-VPN用サブネット名
+    default:                                          sample-ssl-vpn-subnet
+
+  param-web-ssl-vpn-port-name:
+    type:                                             string
+    description:                                      WEBサーバ用SSL-VPN側ポート名
+    default:                                          sample-pri-web-ssl-vpn-port
+
+  param-app-ssl-vpn-port-name:
+    type:                                             string
+    description:                                      APPサーバ用SSL-VPN側ポート名
+    default:                                          sample-pri-app-ssl-vpn-port
+
+  param-web-server-sg-name:
+    type:                                             string
+    description:                                      WEBサーバ用セキュリティグループ名
+    default:                                          sample-web-server-sg
+
+  param-ssl-vpn-sg-name:
+    type:                                             string
+    description:                                      APPサーバ用SSL-VPN側セキュリティグループ名
+    default:                                          sample-ssl-vpn-sg
+
+resources:
+  # SSL-VPN設定
+  ssl_vpn_router:
+    type:                                             OS::Neutron::Router
+    properties:
+      availability_zone:                              { get_param : param-az }
+      name:                                           { get_param : param-ssl-vpn-router-name }
+      external_gateway_info:                          {"network": { get_param: param-ssl-vpn-ext-network-name } }
+
+  ext_router_interface:
+    type:                                             OS::Neutron::RouterInterface
+    properties:
+      port_id:                                        { get_resource: ssl_vpn_router_interface_port }
+      router_id:                                      { get_resource: ssl_vpn_router }
+
+  ssl_vpn_router_interface_port:
+    type:                                             OS::Neutron::Port
+    properties:
+      admin_state_up:                                 true
+      availability_zone:                              { get_param : param-az }
+      fixed_ips:
+      - ip_address:                                   { get_param : param-ssl-vpn-router-ip }
+      name:                                           { get_param : param-ssl-vpn-router-port-name }
+      network_id:                                     { get_resource: ssl_vpn_network }
+
+  ssl_vpn_network:
+    type:                                             OS::Neutron::Net
+    properties:
+      name:                                           { get_param : param-ssl-vpn-network-name }
+      availability_zone:                              { get_param : param-az }
+
+  ssl_vpn_subnet:
+    type:                                             OS::Neutron::Subnet
+    properties:
+      name:                                           { get_param : param-ssl-vpn-subnet-name }
+      network_id:                                     { get_resource : ssl_vpn_network }
+      availability_zone:                              { get_param : param-az }
+      cidr:                                           { get_param : param-ssl-vpn-subnet-cidr }
+      dns_nameservers:
+        - { get_param :                               [ param-dns-servers, 0 ] }
+        - { get_param :                               [ param-dns-servers, 1 ] }
+      host_routes:
+        - { "nexthop": { get_param : param-ssl-vpn-router-ip } , "destination": { get_param : param-client-subnet-cidr } }
+
+  # WEBサーバの設定
+  web_server:
+    type: OS::Nova::Server
+    properties:
+      name:                                           { get_param : param-web-name }
+      availability_zone:                              { get_param: param-az }
+      key_name:                                       { get_param : param-key-name }
+      block_device_mapping:
+      - device_name: vda
+        volume_id:                                    {get_resource: web_sysvol}
+      flavor:                                         { get_param: param-web-flavor }
+      networks: [{"port": { get_resource: web_port }} , {"port": { get_resource: web_ssl_vpn_port }}]
+      user_data_format: RAW
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/sh
+            echo "ip route del default via $SSL_VPN_ROUTER_IP" >> /etc/sysconfig/network-scripts/network-functions
+            systemctl restart network
+          params:
+            $SSL_VPN_ROUTER_IP:                       { get_param : param-ssl-vpn-router-ip }
+
+  web_sysvol:
+    type: OS::Cinder::Volume
+    properties:
+      availability_zone:                              { get_param: param-az }
+      description:
+      image:                                          { get_param: param-web-image-id }
+      name:                                           { get_param : param-web-volume-name }
+      size:                                           { get_param: param-web-volume-size }
+      volume_type:                                    { get_param: param-web-volume-type }
+
+  web_fip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      port_id:                                        { get_resource : web_port }
+      floating_network_id:                            { get_param : param-ext-network-id }
+      availability_zone:                              { get_param : param-az}
+
+  web_ssl_vpn_port:
+    type: OS::Neutron::Port
+    properties:
+      name:                                           { get_param : param-web-ssl-vpn-port-name }
+      network_id:                                     { get_resource: ssl_vpn_network }
+      availability_zone:                              { get_param: param-az }
+      security_groups:
+        - {get_resource: ssl_vpn_sg }
+      fixed_ips:
+        - subnet_id:                                  { get_resource: ssl_vpn_subnet }
+
+  web_server_sg:
+    type:                                             OS::Neutron::SecurityGroup
+    properties:
+      name:                                           { get_param : param-web-server-sg-name }
+      rules:
+        # 外部からのHTTPアクセスを許可
+        - { direction: ingress, ethertype: IPv4, port_range_min: 80, port_range_max: 80, protocol: tcp, remote_ip_prefix: 0.0.0.0/0 }
+        # 外部へのICMPを許可
+        - { direction: egress, ethertype: IPv4, protocol: icmp, remote_ip_prefix: 0.0.0.0/0 }
+        # 外部へのSSHを許可
+        - { direction: egress, ethertype: IPv4, port_range_min: 22, port_range_max: 22, protocol: tcp, remote_ip_prefix: 0.0.0.0/0 }
+        # 外部へのHTTPを許可
+        - { direction: egress, ethertype: IPv4, port_range_min: 80, port_range_max: 80, protocol: tcp, remote_ip_prefix: 0.0.0.0/0 }
+        # 外部へのHTTPSを許可
+        - { direction: egress, ethertype: IPv4, port_range_min: 443, port_range_max: 443, protocol: tcp, remote_ip_prefix: 0.0.0.0/0 }
+        # 内部APPサーバへのアクセスを許可
+        - { direction: egress, ethertype: IPv4, port_range_min: 8080, port_range_max: 8080, protocol: tcp, remote_group_id: { get_param : param-app-and-rds-subnet-cidr } }
+        # cloud-init用サーバへのHTTPアクセスを許可
+        - { direction: egress, ethertype: IPv4, port_range_min: 80, port_range_max: 80, protocol: tcp, remote_ip_prefix: { get_param : param-cloud-init-srv-ip } }
+        # DNS
+        - { direction: egress, ethertype: IPv4, port_range_min: 53, port_range_max: 53, protocol: tcp, remote_ip_prefix: { get_param : [ param-dns-servers, 0 ] } }
+        - { direction: egress, ethertype: IPv4, port_range_min: 53, port_range_max: 53, protocol: tcp, remote_ip_prefix: { get_param : [ param-dns-servers, 1 ] } }
+        - { direction: egress, ethertype: IPv4, port_range_min: 53, port_range_max: 53, protocol: udp, remote_ip_prefix: { get_param : [ param-dns-servers, 0 ] } }
+        - { direction: egress, ethertype: IPv4, port_range_min: 53, port_range_max: 53, protocol: udp, remote_ip_prefix: { get_param : [ param-dns-servers, 1 ] } }
+
+  ssl_vpn_sg:
+    type:                                             OS::Neutron::SecurityGroup
+    properties:
+      name:                                           { get_param : param-ssl-vpn-sg-name }
+      rules:
+        # クライアントネットワークからのSSHを許可
+        - { direction: ingress, ethertype: IPv4, port_range_min: 22, port_range_max: 22, protocol: tcp, remote_ip_prefix: { get_param : param-client-subnet-cidr } }
+        # クライアントネットワークからのHTTPを許可
+        - { direction: ingress, ethertype: IPv4, port_range_min: 80, port_range_max: 80, protocol: tcp, remote_ip_prefix: { get_param : param-client-subnet-cidr } }
+        # クライアントネットワークからのICMPを許可
+        - { direction: ingress, ethertype: IPv4, protocol: icmp, remote_ip_prefix: { get_param : param-client-subnet-cidr } }
+        # SSL-VPNネットワークからのSSHを許可
+        - { direction: ingress, ethertype: IPv4, port_range_min: 22, port_range_max: 22, protocol: tcp, remote_ip_prefix: { get_param : param-ssl-vpn-subnet-cidr } }
+        # SSL-VPNネットワークからのICMPを許可
+        - { direction: ingress, ethertype: IPv4, protocol: icmp, remote_ip_prefix: { get_param : param-ssl-vpn-subnet-cidr } }

@@ -1,0 +1,122 @@
+#Heat templateのバージョンは2013-05-23で固定
+heat_template_version:                                2013-05-23
+description:                                          インフラプロト3rdスタック作成テンプレート
+
+#以下、「parameters」(変数宣言)と「resources」(仮想リソース作成)セクションに分かれる
+parameters:
+  param-dns-servers:
+    type:                                             comma_delimited_list
+    description:                                      DNSサーバのリスト
+
+  param-az:
+    type:                                             string
+    description:                                      AZ名
+
+  param-ssl-vpn-subnet-cidr:
+    type:                                             string
+    description:                                      SSL-VPN用サブネットのCIDR
+    default:                                          172.20.127.0/24
+
+  param-client-subnet-cidr:
+    type:                                             string
+    description:                                      クライアント用サブネットのCIDR
+    default:                                          192.168.0.0/24
+
+  param-ssl-vpn-router-ip:
+    type:                                             string
+    description:                                      SSL-VPN用ルータのIP
+    default:                                          172.20.127.1
+
+  ## SSL-VPN関連
+  param-ssl-vpn-router-name:
+    type:                                             string
+    description:                                      SSL-VPN用ルータ名
+    default:                                          sample-ssl-vpn-router
+
+  param-ssl-vpn-router-port-name:
+    type:                                             string
+    description:                                      SSL-VPN用ルータのポート名
+    default:                                          sample-ssl-vpn-router-port
+
+  param-ssl-vpn-network-name:
+    type:                                             string
+    description:                                      SSL-VPN用ネットワーク名
+    default:                                          sample-ssl-vpn-network
+
+  param-ssl-vpn-subnet-name:
+    type:                                             string
+    description:                                      SSL-VPN用サブネット名
+    default:                                          sample-ssl-vpn-subnet
+
+  param-dev-front-port-name:
+    type:                                             string
+    description:                                      開発環境フロントエンドサーバ用ポート名
+    default:                                          dev-front-port
+
+  param-dev-front-port-name:
+    type:                                             string
+    description:                                      開発環境バックエンドサーバ用ポート名
+    default:                                          dev-back-port
+
+  param-dev-front-port-name:
+    type:                                             string
+    description:                                      ST環境フロントエンドサーバ用ポート名
+    default:                                          st-front-port
+
+  param-dev-front-port-name:
+    type:                                             string
+    description:                                      ST環境バックエンドサーバ用ポート名
+    default:                                          st-back-port
+
+  param-dev-front-port-name:
+    type:                                             string
+    description:                                      本番環境フロントエンドサーバ用ポート名
+    default:                                          prod-front-port
+
+  param-dev-front-port-name:
+    type:                                             string
+    description:                                      本番環境バックエンドサーバ用ポート名
+    default:                                          prod-back-port
+
+resources:
+  # SSL-VPN設定
+  ssl_vpn_router:
+    type:                                             OS::Neutron::Router
+    properties:
+      availability_zone:                              { get_param : param-az }
+      name:                                           { get_param : param-ssl-vpn-router-name }
+
+  ext_router_interface:
+    type:                                             OS::Neutron::RouterInterface
+    properties:
+      port_id:                                        { get_resource: ssl_vpn_router_interface_port }
+      router_id:                                      { get_resource: ssl_vpn_router }
+
+  ssl_vpn_router_interface_port:
+    type:                                             OS::Neutron::Port
+    properties:
+      admin_state_up:                                 true
+      availability_zone:                              { get_param : param-az }
+      fixed_ips:
+      - ip_address:                                   { get_param : param-ssl-vpn-router-ip }
+      name:                                           { get_param : param-ssl-vpn-router-port-name }
+      network_id:                                     { get_resource: ssl_vpn_network }
+
+  ssl_vpn_network:
+    type:                                             OS::Neutron::Net
+    properties:
+      name:                                           { get_param : param-ssl-vpn-network-name }
+      availability_zone:                              { get_param : param-az }
+
+  ssl_vpn_subnet:
+    type:                                             OS::Neutron::Subnet
+    properties:
+      name:                                           { get_param : param-ssl-vpn-subnet-name }
+      network_id:                                     { get_resource : ssl_vpn_network }
+      availability_zone:                              { get_param : param-az }
+      cidr:                                           { get_param : param-ssl-vpn-subnet-cidr }
+      dns_nameservers:
+        - { get_param :                               [ param-dns-servers, 0 ] }
+        - { get_param :                               [ param-dns-servers, 1 ] }
+      host_routes:
+        - { "nexthop": { get_param : param-ssl-vpn-router-ip } , "destination": { get_param : param-client-subnet-cidr } }

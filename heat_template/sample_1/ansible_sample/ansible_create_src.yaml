@@ -1,0 +1,158 @@
+heat_template_version:                                2013-05-23
+description:                                          sample1用構成管理ツール用スタック作成テンプレート
+parameters:
+  param-ansible-image-id:
+    type:                                             string
+    description:                                      構成管理サーバに使用するイメージID
+    default:                                          383ed3f8-0773-4b14-96c8-feb387dd3935 #CentOS 7.2 64bit (English) 02
+
+  param-ansible-flavor:
+    type:                                             string
+    description:                                      構成管理サーバのフレーバー名
+    default:                                          T-1
+
+  param-ansible-volume-type:
+    type:                                             string
+    description:                                      構成管理サーバのボリュームタイプ名
+    default:                                          M1
+
+  param-ansible-volume-size:
+    type:                                             string
+    description:                                      構成管理サーバのボリュームサイズ(GB)
+    default:                                          '30'
+
+  param-cloud-init-srv-ip:
+    type:                                             string
+    description:                                      cloud-initが動作するサーバのIP(IPアドレスについては、機能説明書を参照)
+    default:                                          169.254.169.254/32 
+
+  param-ansible-common-sg-name:
+    type:                                             string
+    default:                                          sample-ansible-common-sg
+
+  param-dns-servers:
+    type:                                             comma_delimited_list
+    description:                                      プライマリ側AZのDNSサーバのリスト
+
+  param-az:
+    type:                                             string
+    description:                                      プライマリ側AZ名
+
+  param-ansible-name:
+    type:                                             string
+    description:                                      プライマリ側構成管理サーバ名
+    default:                                          sample-ansible-server
+
+  param-ansible-volume-name:
+    type:                                             string
+    description:                                      プライマリ側構成管理サーバのボリューム名
+    default:                                          sample-ansible-volume
+
+  param-key-name:
+    type:                                             string
+    description:                                      プライマリ側構成管理サーバへの接続に使用する鍵
+
+  param-ansible-port-name:
+    type:                                             string
+    description:                                      プライマリ側構成管理サーバ用ポート名
+    default:                                          sample-ansible-port
+
+  param-ansible-server-sg-name:
+    type:                                             string
+    description:                                      プライマリ側構成管理サーバ用セキュリティグループ名
+    default:                                          sample-ansible-server-sg
+  
+  param-ansible-network-id:
+    type:                                             string
+    description:                                      プライマリ側構成管理サーバ用ネットワークID
+    
+  param-ansible-subnet-id:
+    type:                                             string
+    description:                                      プライマリ側構成管理サーバ用サブネットID
+
+  param-client-subnet-cidr:
+    type:                                             string
+    description:                                      プライマリ側クライアント用サブネットのCIDR
+    default:                                          192.168.0.0/24
+
+  param-ssl-vpn-subnet-cidr:
+    type:                                             string
+    description:                                      プライマリ側SSL-VPN用サブネットのCIDR
+    
+resources:
+  # プライマリ側構成管理サーバの設定
+  ansible_server:
+    type: OS::Nova::Server
+    properties:
+      name: { get_param : param-ansible-name }
+      availability_zone: { get_param: param-az }
+      key_name: { get_param : param-key-name }
+      block_device_mapping:
+      - device_name: vda
+        volume_id: {get_resource: ansible_sysvol}
+      flavor: { get_param: param-ansible-flavor }
+      networks: [{"port": { get_resource: ansible_port }}]
+      user_data_format: RAW
+      user_data: |
+        #!/bin/bash
+        yum -y install gcc gcc-c++ kernel-devel python-devel
+        curl -kL https://bootstrap.pypa.io/get-pip.py | python
+        easy_install -U setuptools
+        pip install ansible
+        yum -y install unzip
+        
+  ansible_sysvol:
+    type: OS::Cinder::Volume
+    properties:
+      availability_zone: { get_param: param-az }
+      description:
+      image: { get_param: param-ansible-image-id }
+      name: { get_param : param-ansible-volume-name }
+      size: { get_param: param-ansible-volume-size }
+      volume_type: { get_param: param-ansible-volume-type }
+
+  ansible_port:
+    type: OS::Neutron::Port
+    properties:
+      name: { get_param : param-ansible-port-name }
+      network_id: { get_param: param-ansible-network-id }
+      availability_zone: { get_param: param-az }
+      security_groups:
+        - {get_resource: ansible_server_sg }
+        - {get_resource: common_sg }
+      fixed_ips:
+        - subnet_id: { get_param: param-ansible-subnet-id }
+
+  ansible_server_sg:
+    type:                                             OS::Neutron::SecurityGroup
+    properties:
+      name:                                           { get_param : param-ansible-server-sg-name }
+      rules:
+        # クライアントネットワークからのSSHを許可
+        - { direction: ingress, ethertype: IPv4, port_range_min: 22, port_range_max: 22, protocol: tcp, remote_ip_prefix: { get_param : param-client-subnet-cidr } }
+        # クライアントネットワークからのICMPを許可
+        - { direction: ingress, ethertype: IPv4, protocol: icmp, remote_ip_prefix: { get_param : param-client-subnet-cidr } }
+        # セットアップ対象への22ポートを許可
+        - { direction: egress, ethertype: IPv4, port_range_min: 22, port_range_max: 22, protocol: tcp, remote_ip_prefix: { get_param : param-ssl-vpn-subnet-cidr } }
+        # セットアップ対象への5986ポートを許可
+        - { direction: egress, ethertype: IPv4, port_range_min: 5986, port_range_max: 5986, protocol: tcp, remote_ip_prefix: { get_param : param-ssl-vpn-subnet-cidr } }
+        # DNSへのアクセスを許可
+        - { direction: egress, ethertype: IPv4, port_range_min: 53, port_range_max: 53, protocol: tcp, remote_ip_prefix: { get_param : [ param-dns-servers, 0 ] } }
+        - { direction: egress, ethertype: IPv4, port_range_min: 53, port_range_max: 53, protocol: tcp, remote_ip_prefix: { get_param : [ param-dns-servers, 1 ] } }
+        - { direction: egress, ethertype: IPv4, port_range_min: 53, port_range_max: 53, protocol: udp, remote_ip_prefix: { get_param : [ param-dns-servers, 0 ] } }
+        - { direction: egress, ethertype: IPv4, port_range_min: 53, port_range_max: 53, protocol: udp, remote_ip_prefix: { get_param : [ param-dns-servers, 1 ] } }
+
+  common_sg:
+    type:                                             OS::Neutron::SecurityGroup
+    properties:
+      name:                                           { get_param : param-ansible-common-sg-name }
+      rules:
+        # 外部へのICMPを許可
+        - { direction: egress, ethertype: IPv4, protocol: icmp, remote_ip_prefix: 0.0.0.0/0 }
+        # 外部へのHTTPを許可
+        - { direction: egress, ethertype: IPv4, port_range_min: 80, port_range_max: 80, protocol: tcp, remote_ip_prefix: 0.0.0.0/0 }
+        # 外部へのHTTPSを許可
+        - { direction: egress, ethertype: IPv4, port_range_min: 443, port_range_max: 443, protocol: tcp, remote_ip_prefix: 0.0.0.0/0 }
+        # cloud-init用サーバへのHTTPアクセスを許可
+        - { direction: egress, ethertype: IPv4, port_range_min: 80, port_range_max: 80, protocol: tcp, remote_ip_prefix: { get_param : param-cloud-init-srv-ip } }
+
